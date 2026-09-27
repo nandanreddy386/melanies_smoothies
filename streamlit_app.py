@@ -1,107 +1,112 @@
+# Import Python packages
 import streamlit as st
+import requests
+
+from snowflake.snowpark.context import get_active_session
 from snowflake.snowpark.functions import col
 
 
 # ---------------------------------------------------------
-# Connect to Snowflake
+# Page title
 # ---------------------------------------------------------
-conn = st.connection("snowflake")
-session = conn.session()
 
-
-# ---------------------------------------------------------
-# App title
-# ---------------------------------------------------------
 st.title("🥤 Customize Your Smoothie! 🥤")
 
 st.write(
-    """
-    Choose the fruits you want in your custom Smoothie!
-    """
+    "Choose the fruits you want in your custom Smoothie!"
 )
 
 
 # ---------------------------------------------------------
-# Get smoothie name
+# Get the current Snowflake session
 # ---------------------------------------------------------
+
+session = get_active_session()
+
+
+# ---------------------------------------------------------
+# Get the name of the smoothie
+# ---------------------------------------------------------
+
 name_on_order = st.text_input("Name on Smoothie:")
 
-if name_on_order:
-    st.write(
-        "The name on your Smoothie will be:",
-        name_on_order
-    )
+st.write(
+    "The name on your Smoothie will be:",
+    name_on_order
+)
 
 
 # ---------------------------------------------------------
 # Get fruit options from Snowflake
 # ---------------------------------------------------------
+
 my_dataframe = (
-    session.table("smoothies.public.fruit_options")
+    session.table("SMOOTHIES.PUBLIC.FRUIT_OPTIONS")
     .select(col("FRUIT_NAME"))
-    .to_pandas()
 )
 
-fruit_options = my_dataframe["FRUIT_NAME"].tolist()
-
 
 # ---------------------------------------------------------
-# Choose up to 5 ingredients
+# Choose ingredients
 # ---------------------------------------------------------
+
 ingredients_list = st.multiselect(
     "Choose up to 5 ingredients:",
-    fruit_options,
+    my_dataframe,
     max_selections=5
 )
 
 
 # ---------------------------------------------------------
-# Convert selected ingredients into one string
+# Display selected ingredients
 # ---------------------------------------------------------
-ingredients_string = ""
 
 if ingredients_list:
-    for fruit_chosen in ingredients_list:
-        ingredients_string += fruit_chosen + " "
+
+    ingredients_string = " ".join(ingredients_list)
+
+    st.write(
+        "Your selected ingredients:",
+        ingredients_string
+    )
 
 
 # ---------------------------------------------------------
-# Submit order
+# Submit smoothie order
 # ---------------------------------------------------------
-submitted = st.button("Submit Order")
+
+if name_on_order and ingredients_list:
+
+    time_to_insert = st.button("Submit Order")
+
+    if time_to_insert:
+
+        session.sql(
+            """
+            INSERT INTO SMOOTHIES.PUBLIC.ORDERS
+                (INGREDIENTS, NAME_ON_ORDER)
+            SELECT ?, ?
+            """,
+            params=[ingredients_string, name_on_order]
+        ).collect()
+
+        st.success(
+            "Your Smoothie is ordered, " + name_on_order + "!",
+            icon="🥤"
+        )
 
 
-if submitted:
+# ---------------------------------------------------------
+# SmoothieFroot API
+# ---------------------------------------------------------
 
-    # Check that a name and at least one ingredient were entered
-    if not name_on_order:
-        st.warning("Please enter a name for your smoothie.")
+st.subheader("🍉 SmoothieFroot Nutrition Information")
 
-    elif not ingredients_list:
-        st.warning("Please choose at least one ingredient.")
 
-    else:
+smoothiefroot_response = requests.get(
+    "https://my.smoothiefroot.com/api/fruit/watermelon"
+)
 
-        # Escape apostrophes so the SQL statement remains valid
-        safe_name = name_on_order.replace("'", "''")
-        safe_ingredients = ingredients_string.strip().replace("'", "''")
 
-        # Insert the order into Snowflake
-        my_insert_stmt = f"""
-            INSERT INTO smoothies.public.orders
-            (ingredients, name_on_order)
-            VALUES
-            ('{safe_ingredients}', '{safe_name}')
-        """
-
-        try:
-            session.sql(my_insert_stmt).collect()
-
-            st.success(
-                f"Your Smoothie is ordered, {name_on_order}!",
-                icon="🥤"
-            )
-
-        except Exception as e:
-            st.error("Something went wrong while placing your order.")
-            st.write(e)
+# Display the JSON response as a Python object
+st.json(smoothiefroot_response.json())
