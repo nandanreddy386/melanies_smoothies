@@ -47,27 +47,28 @@ if ingredients_list:
 
     ingredients_string = ""
 
-    # Get nutrition information for each selected fruit
+    # Loop through each selected fruit
     for fruit_chosen in ingredients_list:
 
+        # Add fruit to the order string
         ingredients_string += fruit_chosen + " "
 
+        # Display a heading for this fruit
+        st.subheader(
+            fruit_chosen + " Nutrition Information"
+        )
+
+        # Call the SmoothieFroot API
         smoothiefroot_response = requests.get(
             "https://my.smoothiefroot.com/api/fruit/"
             + fruit_chosen.lower()
         )
 
+        # Display the API response as a dataframe
         sf_df = st.dataframe(
             data=smoothiefroot_response.json(),
             use_container_width=True
         )
-
-
-    # Display selected ingredients
-    st.write(
-        "Your selected ingredients:",
-        ingredients_string
-    )
 
 
     # Submit order button
