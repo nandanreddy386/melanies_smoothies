@@ -6,10 +6,11 @@ from snowflake.snowpark.context import get_active_session
 from snowflake.snowpark.functions import col
 
 
-# ---------------------------------------------------------
-# Page title
-# ---------------------------------------------------------
+# Get the current Snowflake session
+session = get_active_session()
 
+
+# Page title
 st.title("🥤 Customize Your Smoothie! 🥤")
 
 st.write(
@@ -17,17 +18,7 @@ st.write(
 )
 
 
-# ---------------------------------------------------------
-# Get the current Snowflake session
-# ---------------------------------------------------------
-
-session = get_active_session()
-
-
-# ---------------------------------------------------------
 # Get the name of the smoothie
-# ---------------------------------------------------------
-
 name_on_order = st.text_input("Name on Smoothie:")
 
 st.write(
@@ -36,20 +27,14 @@ st.write(
 )
 
 
-# ---------------------------------------------------------
-# Get fruit options from Snowflake
-# ---------------------------------------------------------
-
+# Get the fruit options from Snowflake
 my_dataframe = (
     session.table("SMOOTHIES.PUBLIC.FRUIT_OPTIONS")
     .select(col("FRUIT_NAME"))
 )
 
 
-# ---------------------------------------------------------
 # Choose ingredients
-# ---------------------------------------------------------
-
 ingredients_list = st.multiselect(
     "Choose up to 5 ingredients:",
     my_dataframe,
@@ -57,28 +42,39 @@ ingredients_list = st.multiselect(
 )
 
 
-# ---------------------------------------------------------
-# Display selected ingredients
-# ---------------------------------------------------------
-
+# Only continue if ingredients have been selected
 if ingredients_list:
 
-    ingredients_string = " ".join(ingredients_list)
+    ingredients_string = ""
 
+    # Get nutrition information for each selected fruit
+    for fruit_chosen in ingredients_list:
+
+        ingredients_string += fruit_chosen + " "
+
+        smoothiefroot_response = requests.get(
+            "https://my.smoothiefroot.com/api/fruit/"
+            + fruit_chosen.lower()
+        )
+
+        sf_df = st.dataframe(
+            data=smoothiefroot_response.json(),
+            use_container_width=True
+        )
+
+
+    # Display selected ingredients
     st.write(
         "Your selected ingredients:",
         ingredients_string
     )
 
 
-# ---------------------------------------------------------
-# Submit smoothie order
-# ---------------------------------------------------------
-
-if name_on_order and ingredients_list:
-
+    # Submit order button
     time_to_insert = st.button("Submit Order")
 
+
+    # Insert the order into Snowflake
     if time_to_insert:
 
         session.sql(
@@ -94,19 +90,3 @@ if name_on_order and ingredients_list:
             "Your Smoothie is ordered, " + name_on_order + "!",
             icon="🥤"
         )
-
-
-# ---------------------------------------------------------
-# SmoothieFroot API
-# ---------------------------------------------------------
-
-st.subheader("🍉 SmoothieFroot Nutrition Information")
-
-
-smoothiefroot_response = requests.get(
-    "https://my.smoothiefroot.com/api/fruit/watermelon"
-)
-
-
-# Display the JSON response as a Python object
-st.json(smoothiefroot_response.json())
