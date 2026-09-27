@@ -1,6 +1,7 @@
 # Import Python packages
 import streamlit as st
 import requests
+import pandas as pd
 
 from snowflake.snowpark.context import get_active_session
 from snowflake.snowpark.functions import col
@@ -27,17 +28,24 @@ st.write(
 )
 
 
-# Get the fruit options from Snowflake
+# Get fruit options from Snowflake
 my_dataframe = (
     session.table("SMOOTHIES.PUBLIC.FRUIT_OPTIONS")
-    .select(col("FRUIT_NAME"))
+    .select(
+        col("FRUIT_NAME"),
+        col("SEARCH_ON")
+    )
 )
+
+
+# Convert Snowpark DataFrame to Pandas DataFrame
+pd_df = my_dataframe.to_pandas()
 
 
 # Choose ingredients
 ingredients_list = st.multiselect(
     "Choose up to 5 ingredients:",
-    my_dataframe,
+    pd_df["FRUIT_NAME"].tolist(),
     max_selections=5
 )
 
@@ -47,24 +55,39 @@ if ingredients_list:
 
     ingredients_string = ""
 
-    # Loop through each selected fruit
+    # Loop through selected fruits
     for fruit_chosen in ingredients_list:
 
-        # Add fruit to the order string
+        # Add fruit to order string
         ingredients_string += fruit_chosen + " "
 
-        # Display a heading for this fruit
+        # Find the SEARCH_ON value for the selected fruit
+        search_on = pd_df.loc[
+            pd_df["FRUIT_NAME"] == fruit_chosen,
+            "SEARCH_ON"
+        ].iloc[0]
+
+        # Display the search value
+        st.write(
+            "The search value for",
+            fruit_chosen,
+            "is",
+            search_on,
+            "."
+        )
+
+        # Display nutrition heading
         st.subheader(
             fruit_chosen + " Nutrition Information"
         )
 
-        # Call the SmoothieFroot API
+        # Call SmoothieFroot API using SEARCH_ON
         smoothiefroot_response = requests.get(
             "https://my.smoothiefroot.com/api/fruit/"
-            + fruit_chosen.lower()
+            + search_on.lower()
         )
 
-        # Display the API response as a dataframe
+        # Display API response
         sf_df = st.dataframe(
             data=smoothiefroot_response.json(),
             use_container_width=True
@@ -75,7 +98,7 @@ if ingredients_list:
     time_to_insert = st.button("Submit Order")
 
 
-    # Insert the order into Snowflake
+    # Insert order into Snowflake
     if time_to_insert:
 
         session.sql(
